@@ -1,0 +1,54 @@
+﻿  d3dApp.cpp
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(387,31): error C2440: '=': cannot convert from 'const wchar_t [8]' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(387,21): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(391,47): error C2664: 'int MessageBoxA(HWND,LPCSTR,LPCSTR,UINT)': cannot convert argument 2 from 'const wchar_t [22]' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(391,17): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\winuser.h(9145,1): message : see declaration of 'MessageBoxA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(401,1): error C2664: 'HWND CreateWindowExA(DWORD,LPCSTR,LPCSTR,DWORD,int,int,int,int,HWND,HMENU,HINSTANCE,LPVOID)': cannot convert argument 2 from 'const wchar_t [8]' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(401,1): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\winuser.h(4420,1): message : see declaration of 'CreateWindowExA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(405,46): error C2664: 'int MessageBoxA(HWND,LPCSTR,LPCSTR,UINT)': cannot convert argument 2 from 'const wchar_t [21]' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(405,17): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\winuser.h(9145,1): message : see declaration of 'MessageBoxA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,52): error C2664: 'BOOL SetWindowTextA(HWND,LPCSTR)': cannot convert argument 2 from 'const _Elem *' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,52): error C2664:         with
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,52): error C2664:         [
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,52): error C2664:             _Elem=wchar_t
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,52): error C2664:         ]
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(600,50): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\winuser.h(8896,1): message : see declaration of 'SetWindowTextA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,39): error C2664: 'void OutputDebugStringA(LPCSTR)': cannot convert argument 1 from 'const _Elem *' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,39): error C2664:         with
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,39): error C2664:         [
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,39): error C2664:             _Elem=wchar_t
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,39): error C2664:         ]
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(622,37): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\debugapi.h(55,1): message : see declaration of 'OutputDebugStringA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,39): error C2664: 'void OutputDebugStringA(LPCSTR)': cannot convert argument 1 from 'const _Elem *' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,39): error C2664:         with
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,39): error C2664:         [
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,39): error C2664:             _Elem=wchar_t
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,39): error C2664:         ]
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(648,37): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\debugapi.h(55,1): message : see declaration of 'OutputDebugStringA'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,41): error C2664: 'void OutputDebugStringA(LPCSTR)': cannot convert argument 1 from 'const _Elem *' to 'LPCSTR'
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,41): error C2664:         with
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,41): error C2664:         [
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,41): error C2664:             _Elem=wchar_t
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,41): error C2664:         ]
+C:\Users\User\Documents\dev\Common\d3dApp.cpp(679,39): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+  d3dUtil.cpp
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\debugapi.h(55,1): message : see declaration of 'OutputDebugStringA'
+C:\Users\User\Documents\dev\Common\d3dUtil.cpp(30,5): warning C4244: 'argument': conversion from 'std::streamoff' to 'SIZE_T', possible loss of data
+C:\Users\User\Documents\dev\Common\d3dUtil.cpp(70,32): warning C4244: '=': conversion from 'UINT64' to 'LONG_PTR', possible loss of data
+C:\Users\User\Documents\dev\Common\d3dUtil.cpp(120,42): error C2440: 'initializing': cannot convert from 'const TCHAR *' to 'std::basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>'
+  Fabric.cpp
+C:\Users\User\Documents\dev\Common\d3dUtil.cpp(120,42): message : No constructor could take the source type, or constructor overload resolution was ambiguous
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,70): error C2664: 'int MessageBoxA(HWND,LPCSTR,LPCSTR,UINT)': cannot convert argument 2 from 'const _Elem *' to 'LPCSTR'
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,70): error C2664:         with
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,70): error C2664:         [
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,70): error C2664:             _Elem=wchar_t
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,70): error C2664:         ]
+C:\Users\User\Documents\dev\MyProjects\Fabric\Fabric.cpp(165,47): message : Types pointed to are unrelated; conversion requires reinterpret_cast, C-style cast or function-style cast
+  Generating Code...
+C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\um\winuser.h(9145,1): message : see declaration of 'MessageBoxA'
