@@ -1,6 +1,6 @@
 #include <iostream>
 #include"Fabric.h"
-
+#include"../../Common/MathHelper.h"
 
 using DirectX::XMFLOAT3;
 
@@ -287,7 +287,7 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 				diffy = currPos[(j + 1) * n + (i + 1)].y - currPos[j * n + i].y;
 				diffz = currPos[(j + 1) * n + (i + 1)].z - currPos[j * n + i].z;
 				diffNorm = sqrt(diffx * diffx + diffy * diffy + diffz * diffz);
-				k = shortSpring * (diffNorm - AL_SQRT2 * dx) * (1 / diffNorm);
+				k = shortSpring * (diffNorm - MathHelper::sqrt_2 * dx) * (1 / diffNorm);
 				//now force due to damper
 				velDiffx = velocity[(j + 1) * n + (i + 1)].x - velocity[j * n + i].x;
 				velDiffy = velocity[(j + 1) * n + (i + 1)].y - velocity[j * n + i].y;
@@ -305,7 +305,7 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 				diffy = currPos[(j + 1) * n + i].y - currPos[j * n + (i + 1)].y;
 				diffz = currPos[(j + 1) * n + i].z - currPos[j * n + (i + 1)].z;
 				diffNorm = sqrt(diffx * diffx + diffy * diffy + diffz * diffz);
-				k = shortSpring * (diffNorm - AL_SQRT2 * dx) * (1 / diffNorm);
+				k = shortSpring * (diffNorm - MathHelper::sqrt_2 * dx) * (1 / diffNorm);
 				//now force due to damper
 				velDiffx = velocity[(j + 1) * n + i].x - velocity[j * n + (i + 1)].x;
 				velDiffy = velocity[(j + 1) * n + i].y - velocity[j * n + (i + 1)].y;
@@ -509,14 +509,14 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 				tangents[j * n + i].x = currPos[(j + 1) * n + i].x - currPos[j * n + i].x;
 				tangents[j * n + i].y = currPos[(j + 1) * n + i].y - currPos[j * n + i].y;
 				tangents[j * n + i].z = currPos[(j + 1) * n + i].z - currPos[j * n + i].z;
-				tangents[j * n + i].normalize();
+				MathHelper::Normalize(tangents[j * n + i]);
 
 				bitangents[j * n + i].x = currPos[j * n + i + 1].x - currPos[j * n + i].x;
 				bitangents[j * n + i].y = currPos[j * n + i + 1].y - currPos[j * n + i].y;
 				bitangents[j * n + i].z = currPos[j * n + i + 1].z - currPos[j * n + i].z;
-				bitangents[j * n + i].normalize();
+				MathHelper::Normalize(bitangents[j * n + i]);
 
-				crossProduct3(bitangents[j * n + i], tangents[j * n + i], normals[j * n + i]);
+				normals[j * n + i] = MathHelper::XMVectorf3Cross(bitangents[j * n + i], tangents[j * n + i]);
 
 			}
 		}

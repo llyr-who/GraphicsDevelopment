@@ -10,6 +10,7 @@ using namespace DirectX;
 
 const float MathHelper::Infinity = FLT_MAX;
 const float MathHelper::Pi       = 3.1415926535f;
+const float MathHelper::sqrt_2 = 1.414f;
 
 float MathHelper::AngleFromXY(float x, float y)
 {

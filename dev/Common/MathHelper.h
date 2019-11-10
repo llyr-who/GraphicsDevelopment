@@ -89,11 +89,28 @@ public:
         return I;
     }
 
+	static void Normalize(DirectX::XMFLOAT3& a) {
+		float norm = a.x * a.x + a.y * a.y + a.z * a.z;
+		a.x /= norm;
+		a.y /= norm;
+		a.z /= norm;
+	}
+
+	static DirectX::XMFLOAT3 XMVectorf3Cross(DirectX::XMFLOAT3& V1,
+											 DirectX::XMFLOAT3& V2) {
+		DirectX::XMFLOAT3 Result;
+		Result.x = (V1.y * V2.z) - (V1.z * V2.y);
+		Result.y = (V1.z * V2.x) - (V1.x * V2.z);
+		Result.z = (V1.x * V2.y) - (V1.y * V2.x);
+		return Result;
+	}
+
     static DirectX::XMVECTOR RandUnitVec3();
     static DirectX::XMVECTOR RandHemisphereUnitVec3(DirectX::XMVECTOR n);
 
 	static const float Infinity;
 	static const float Pi;
+	static const float sqrt_2;
 
 
 };

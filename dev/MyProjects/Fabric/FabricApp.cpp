@@ -193,6 +193,7 @@ bool FabricApp::Initialize()
     mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	mWaves = std::make_unique<Waves>(128, 128, 1.0f, 0.03f, 4.0f, 0.2f);
+	mFabric = std::make_unique<Fabric>(100,100,0.1,0.1,0.1,0.1,0.1,1,10);
 
     BuildRootSignature();
     BuildShadersAndInputLayout();
