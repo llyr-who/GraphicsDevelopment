@@ -110,6 +110,11 @@ public:
 	///</summary>
     MeshData CreateQuad(float x, float y, float w, float h, float depth);
 
+	///<summary>
+	/// Generates a vector of CCW grid indices for a n by m grid
+	///</summary>
+	static std::vector<std::uint16_t> CreateGridIndices(int n, int m, int tri_count);
+
 private:
 	void Subdivide(MeshData& meshData);
     Vertex MidPoint(const Vertex& v0, const Vertex& v1);

@@ -92,6 +92,7 @@ private:
     void BuildShadersAndInputLayout();
     void BuildLandGeometry();
     void BuildWavesGeometryBuffers();
+	void BuildFabricGeometryBuffers();
     void BuildPSOs();
     void BuildFrameResources();
     void BuildMaterials();
@@ -127,8 +128,8 @@ private:
 	// Render items divided by PSO.
 	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
 
-	std::unique_ptr<Waves> mWaves;
 	std::unique_ptr<Fabric> mFabric;
+	std::unique_ptr<Waves> mWaves;
 
     PassConstants mMainPassCB;
 
@@ -192,16 +193,18 @@ bool FabricApp::Initialize()
     // to query this information.
     mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	mWaves = std::make_unique<Waves>(128, 128, 1.0f, 0.03f, 4.0f, 0.2f);
+	mWaves = std::make_unique<Waves>(128, 128, 1.0f , 0.03f, 4.0f, 0.1f);
 	mFabric = std::make_unique<Fabric>(100,100,0.1,0.1,0.1,0.1,0.1,1,10);
 
-    BuildRootSignature();
-    BuildShadersAndInputLayout();
+	BuildRootSignature();			// Determines the types of data the shaders should expect,
+									// but does not define the actual memory or data.
+
+    BuildShadersAndInputLayout();   // self-explainatory 
 	BuildLandGeometry();
     BuildWavesGeometryBuffers();
+	BuildFabricGeometryBuffers();
 	BuildMaterials();
-    BuildRenderItems();
-	BuildRenderItems();
+    BuildRenderItems();				// constructs Render Item objects
     BuildFrameResources();
 	BuildPSOs();
 
@@ -506,13 +509,18 @@ void FabricApp::UpdateWaves(const GameTimer& gt)
 
 void FabricApp::BuildRootSignature()
 {
+	// 3 params
+
     // Root parameter can be a table, root descriptor or root constants.
     CD3DX12_ROOT_PARAMETER slotRootParameter[3];
+
+	// init as CBV's
 
     // Create root CBV.
     slotRootParameter[0].InitAsConstantBufferView(0);
     slotRootParameter[1].InitAsConstantBufferView(1);
     slotRootParameter[2].InitAsConstantBufferView(2);
+
 
     // A root signature is an array of root parameters.
 	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
@@ -522,7 +530,7 @@ void FabricApp::BuildRootSignature()
     ComPtr<ID3DBlob> errorBlob = nullptr;
     HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
         serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
-
+	
     if(errorBlob != nullptr)
     {
         ::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
@@ -551,7 +559,7 @@ void FabricApp::BuildShadersAndInputLayout()
 void FabricApp::BuildLandGeometry()
 {
 	GeometryGenerator geoGen;
-	GeometryGenerator::MeshData grid = geoGen.CreateGrid(160.0f, 160.0f, 50, 50);
+	GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 20.0f, 50, 50);
 
 	//
 	// Extract the vertex elements we are interested and apply the height function to
@@ -564,7 +572,7 @@ void FabricApp::BuildLandGeometry()
 	{
 		auto& p = grid.Vertices[i].Position;
 		vertices[i].Pos = p;
-		vertices[i].Pos.y = GetHillsHeight(p.x, p.z);
+		vertices[i].Pos.y = GetHillsHeight(p.x, p.z) + 20;
 		vertices[i].Normal = GetHillsNormal(p.x, p.z);
 	}
 
@@ -603,30 +611,54 @@ void FabricApp::BuildLandGeometry()
 	mGeometries["landGeo"] = std::move(geo);
 }
 
+void FabricApp::BuildFabricGeometryBuffers() {
+	assert(mFabric->VertexCount() < 0x0000ffff);
+
+	// Iterate over each quad.
+	int m = mFabric->RowCount();
+	int n = mFabric->ColumnCount();
+	int tri_cnt = mFabric->TriangleCount();
+	auto indices = GeometryGenerator::CreateGridIndices(m, n, tri_cnt);
+
+	UINT vbByteSize = mFabric->VertexCount() * sizeof(Vertex);
+	UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "fabricGeo";
+
+	// Set dynamically.
+	geo->VertexBufferCPU = nullptr;
+	geo->VertexBufferGPU = nullptr;
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry submesh;
+	submesh.IndexCount = (UINT)indices.size();
+	submesh.StartIndexLocation = 0;
+	submesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["grid"] = submesh;
+
+	mGeometries["fabricGeo"] = std::move(geo);
+}
+
 void FabricApp::BuildWavesGeometryBuffers()
 {
-	std::vector<std::uint16_t> indices(3 * mWaves->TriangleCount()); // 3 indices per face
 	assert(mWaves->VertexCount() < 0x0000ffff);
 
 	// Iterate over each quad.
 	int m = mWaves->RowCount();
 	int n = mWaves->ColumnCount();
-	int k = 0;
-	for(int i = 0; i < m - 1; ++i)
-	{
-		for(int j = 0; j < n - 1; ++j)
-		{
-			indices[k] = i*n + j;
-			indices[k + 1] = i*n + j + 1;
-			indices[k + 2] = (i + 1)*n + j;
-
-			indices[k + 3] = (i + 1)*n + j;
-			indices[k + 4] = i*n + j + 1;
-			indices[k + 5] = (i + 1)*n + j + 1;
-
-			k += 6; // next quad
-		}
-	}
+	int tri_cnt = mWaves->TriangleCount();
+	auto indices = GeometryGenerator::CreateGridIndices(m,n,tri_cnt);
 
 	UINT vbByteSize = mWaves->VertexCount()*sizeof(Vertex);
 	UINT ibByteSize = (UINT)indices.size()*sizeof(std::uint16_t);
@@ -659,6 +691,7 @@ void FabricApp::BuildWavesGeometryBuffers()
 	mGeometries["waterGeo"] = std::move(geo);
 }
 
+// Build pipeline state objects (PSO)
 void FabricApp::BuildPSOs()
 {
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
@@ -709,7 +742,14 @@ void FabricApp::BuildMaterials()
     grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
     grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
     grass->Roughness = 0.125f;
-
+	/*
+	auto fabric = std::make_unique<Material>();
+	grass->Name = "fabric";
+	grass->MatCBIndex = 0;
+	grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
+	grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
+	grass->Roughness = 0.125f;
+	*/
     // This is not a good water material definition, but we do not have all the rendering
     // tools we need (transparency, environment reflection), so we fake it for now.
 	auto water = std::make_unique<Material>();
@@ -721,6 +761,7 @@ void FabricApp::BuildMaterials()
 
 	mMaterials["grass"] = std::move(grass);
 	mMaterials["water"] = std::move(water);
+	//mMaterials["fabric"] = std::move(fabric);
 }
 
 void FabricApp::BuildRenderItems()
