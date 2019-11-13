@@ -121,6 +121,7 @@ private:
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
 	RenderItem* mWavesRitem = nullptr;
+	RenderItem* mFabricRitem = nullptr;
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
@@ -205,7 +206,10 @@ bool FabricApp::Initialize()
 	BuildFabricGeometryBuffers();
 	BuildMaterials();
     BuildRenderItems();				// constructs Render Item objects
-    BuildFrameResources();
+
+    BuildFrameResources();			// A frame resource stores the needed
+									// resources needed for the CPU to build
+									// the command lists for a frame.
 	BuildPSOs();
 
     // Execute the initialization commands.
@@ -627,7 +631,6 @@ void FabricApp::BuildFabricGeometryBuffers() {
 
 	// Set dynamically.
 	geo->VertexBufferCPU = nullptr;
-	geo->VertexBufferGPU = nullptr;
 
 	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
 	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
@@ -668,7 +671,6 @@ void FabricApp::BuildWavesGeometryBuffers()
 
 	// Set dynamically.
 	geo->VertexBufferCPU = nullptr;
-	geo->VertexBufferGPU = nullptr;
 
 	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
 	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
@@ -742,33 +744,59 @@ void FabricApp::BuildMaterials()
     grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
     grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
     grass->Roughness = 0.125f;
-	/*
+	
 	auto fabric = std::make_unique<Material>();
 	grass->Name = "fabric";
-	grass->MatCBIndex = 0;
+	grass->MatCBIndex = 1;
 	grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
 	grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
 	grass->Roughness = 0.125f;
-	*/
+	
     // This is not a good water material definition, but we do not have all the rendering
     // tools we need (transparency, environment reflection), so we fake it for now.
 	auto water = std::make_unique<Material>();
 	water->Name = "water";
-	water->MatCBIndex = 1;
+	water->MatCBIndex = 2;
     water->DiffuseAlbedo = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);
     water->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
     water->Roughness = 0.0f;
 
 	mMaterials["grass"] = std::move(grass);
 	mMaterials["water"] = std::move(water);
-	//mMaterials["fabric"] = std::move(fabric);
+	mMaterials["fabric"] = std::move(fabric);
 }
 
 void FabricApp::BuildRenderItems()
 {
+	auto gridRitem = std::make_unique<RenderItem>();
+	gridRitem->World = MathHelper::Identity4x4();
+	gridRitem->ObjCBIndex = 0;
+	gridRitem->Mat = mMaterials["grass"].get();
+	gridRitem->Geo = mGeometries["landGeo"].get();
+	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
+	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
+	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
+
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
+
+	auto fabricRitem = std::make_unique<RenderItem>();
+	fabricRitem->World = MathHelper::Identity4x4();
+	fabricRitem->ObjCBIndex = 1;
+	fabricRitem->Mat = mMaterials["fabric"].get();
+	fabricRitem->Geo = mGeometries["fabricGeo"].get();
+	fabricRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	fabricRitem->IndexCount = fabricRitem->Geo->DrawArgs["grid"].IndexCount;
+	fabricRitem->StartIndexLocation = fabricRitem->Geo->DrawArgs["grid"].StartIndexLocation;
+	fabricRitem->BaseVertexLocation = fabricRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
+
+	mFabricRitem = fabricRitem.get();
+
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(fabricRitem.get());
+
 	auto wavesRitem = std::make_unique<RenderItem>();
 	wavesRitem->World = MathHelper::Identity4x4();
-	wavesRitem->ObjCBIndex = 0;
+	wavesRitem->ObjCBIndex = 2;
 	wavesRitem->Mat = mMaterials["water"].get();
 	wavesRitem->Geo = mGeometries["waterGeo"].get();
 	wavesRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -780,20 +808,9 @@ void FabricApp::BuildRenderItems()
 
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(wavesRitem.get());
 
-	auto gridRitem = std::make_unique<RenderItem>();
-	gridRitem->World = MathHelper::Identity4x4();
-	gridRitem->ObjCBIndex = 1;
-	gridRitem->Mat = mMaterials["grass"].get();
-	gridRitem->Geo = mGeometries["landGeo"].get();
-	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
-	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
-
-	mAllRitems.push_back(std::move(wavesRitem));
 	mAllRitems.push_back(std::move(gridRitem));
+	mAllRitems.push_back(std::move(fabricRitem));
+	mAllRitems.push_back(std::move(wavesRitem));
 }
 
 void FabricApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
