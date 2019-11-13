@@ -1,6 +1,11 @@
-#include <iostream>
+
 #include"Fabric.h"
 #include"../../Common/MathHelper.h"
+
+#include <ppl.h>
+#include <algorithm>
+#include <vector>
+#include <cassert>
 
 using DirectX::XMFLOAT3;
 
@@ -98,12 +103,11 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 			}
 		}
 
-		for (std::size_t i = 0; i < n; i++)
+		for (std::size_t j = 0; j < n; j++)
+		//concurrency::parallel_for(0, n, [this, &windX, &windY, &windZ, &n](int j) 
 		{
-			for (std::size_t j = 0; j < m; j++)
+			for (std::size_t i = 0; i < n; i++)
 			{
-
-
 				float WFx, WFy, WFz;
 				WFx = normals[j * n + i].x * (windX - velocity[j * n + i].x);
 				WFy = normals[j * n + i].y * (windY - velocity[j * n + i].y);
@@ -114,7 +118,8 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 				force[j * n + i].z += 0.3 * Wind * windZ;
 
 			}
-		}
+		};
+
 		//we do the double links first
 
 		for (std::size_t i = 0; i < n - 2; i++)

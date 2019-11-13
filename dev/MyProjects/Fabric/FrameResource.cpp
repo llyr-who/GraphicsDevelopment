@@ -12,6 +12,11 @@ FrameResource::FrameResource(ID3D12Device* device, UINT passCount, UINT objectCo
     ObjectCB = std::make_unique<UploadBuffer<ObjectConstants>>(device, objectCount, true);
 
     WavesVB = std::make_unique<UploadBuffer<Vertex>>(device, waveVertCount, false);
+
+	// this is just a hack, we should have a higharchy of
+	// frame resources! but at the very least fabric and wave should
+	// have different Frame resources!
+	FabricVB = std::make_unique<UploadBuffer<Vertex>>(device, waveVertCount, false);
 }
 
 FrameResource::~FrameResource()

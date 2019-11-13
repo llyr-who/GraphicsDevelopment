@@ -1,24 +1,19 @@
 //***************************************************************************************
-// FabricApp.cpp by Frank Luna (C) 2015 All Rights Reserved.
+// LandAndWavesApp.cpp by Frank Luna (C) 2015 All Rights Reserved.
 //
-// Use arrow keys to move light positions.
-//
+// Hold down '1' key to view scene in wireframe mode.
 //***************************************************************************************
 
 #include "../../Common/d3dApp.h"
 #include "../../Common/MathHelper.h"
 #include "../../Common/UploadBuffer.h"
 #include "../../Common/GeometryGenerator.h"
-#include "Fabric.h"
 #include "FrameResource.h"
 #include "Waves.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 using namespace DirectX::PackedVector;
-
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "D3D12.lib")
 
 const int gNumFrameResources = 3;
 
@@ -33,8 +28,6 @@ struct RenderItem
 	// and scale of the object in the world.
 	XMFLOAT4X4 World = MathHelper::Identity4x4();
 
-	XMFLOAT4X4 TexTransform = MathHelper::Identity4x4();
-
 	// Dirty flag indicating the object data has changed and we need to update the constant buffer.
 	// Because we have an object cbuffer for each FrameResource, we have to apply the
 	// update to each FrameResource.  Thus, when we modify obect data we should set 
@@ -44,7 +37,6 @@ struct RenderItem
 	// Index into GPU constant buffer corresponding to the ObjectCB for this render item.
 	UINT ObjCBIndex = -1;
 
-	Material* Mat = nullptr;
 	MeshGeometry* Geo = nullptr;
 
 	// Primitive topology.
@@ -62,13 +54,13 @@ enum class RenderLayer : int
 	Count
 };
 
-class FabricApp : public D3DApp
+class LandAndWavesApp : public D3DApp
 {
 public:
-    FabricApp(HINSTANCE hInstance);
-    FabricApp(const FabricApp& rhs) = delete;
-    FabricApp& operator=(const FabricApp& rhs) = delete;
-    ~FabricApp();
+    LandAndWavesApp(HINSTANCE hInstance);
+    LandAndWavesApp(const LandAndWavesApp& rhs) = delete;
+    LandAndWavesApp& operator=(const LandAndWavesApp& rhs) = delete;
+    ~LandAndWavesApp();
 
     virtual bool Initialize()override;
 
@@ -84,19 +76,15 @@ private:
 	void OnKeyboardInput(const GameTimer& gt);
 	void UpdateCamera(const GameTimer& gt);
 	void UpdateObjectCBs(const GameTimer& gt);
-	void UpdateMaterialCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
 	void UpdateWaves(const GameTimer& gt);
-	void UpdateFabric(const GameTimer& gt);
 
     void BuildRootSignature();
     void BuildShadersAndInputLayout();
     void BuildLandGeometry();
     void BuildWavesGeometryBuffers();
-	void BuildFabricGeometryBuffers();
     void BuildPSOs();
     void BuildFrameResources();
-    void BuildMaterials();
     void BuildRenderItems();
 	void DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems);
 
@@ -114,15 +102,12 @@ private:
     ComPtr<ID3D12RootSignature> mRootSignature = nullptr;
 
 	std::unordered_map<std::string, std::unique_ptr<MeshGeometry>> mGeometries;
-	std::unordered_map<std::string, std::unique_ptr<Material>> mMaterials;
-	std::unordered_map<std::string, std::unique_ptr<Texture>> mTextures;
 	std::unordered_map<std::string, ComPtr<ID3DBlob>> mShaders;
 	std::unordered_map<std::string, ComPtr<ID3D12PipelineState>> mPSOs;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> mInputLayout;
 
 	RenderItem* mWavesRitem = nullptr;
-	RenderItem* mFabricRitem = nullptr;
 
 	// List of all the render items.
 	std::vector<std::unique_ptr<RenderItem>> mAllRitems;
@@ -130,10 +115,11 @@ private:
 	// Render items divided by PSO.
 	std::vector<RenderItem*> mRitemLayer[(int)RenderLayer::Count];
 
-	std::unique_ptr<Fabric> mFabric;
 	std::unique_ptr<Waves> mWaves;
 
     PassConstants mMainPassCB;
+
+    bool mIsWireframe = false;
 
 	XMFLOAT3 mEyePos = { 0.0f, 0.0f, 0.0f };
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
@@ -159,7 +145,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
 
     try
     {
-        FabricApp theApp(hInstance);
+        LandAndWavesApp theApp(hInstance);
         if(!theApp.Initialize())
             return 0;
 
@@ -172,18 +158,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE prevInstance,
     }
 }
 
-FabricApp::FabricApp(HINSTANCE hInstance)
+LandAndWavesApp::LandAndWavesApp(HINSTANCE hInstance)
     : D3DApp(hInstance)
 {
 }
 
-FabricApp::~FabricApp()
+LandAndWavesApp::~LandAndWavesApp()
 {
     if(md3dDevice != nullptr)
         FlushCommandQueue();
 }
 
-bool FabricApp::Initialize()
+bool LandAndWavesApp::Initialize()
 {
     if(!D3DApp::Initialize())
         return false;
@@ -191,26 +177,14 @@ bool FabricApp::Initialize()
     // Reset the command list to prep for initialization commands.
     ThrowIfFailed(mCommandList->Reset(mDirectCmdListAlloc.Get(), nullptr));
 
-    // Get the increment size of a descriptor in this heap type.  This is hardware specific, so we have
-    // to query this information.
-    mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	mWaves = std::make_unique<Waves>(128, 128, 1.0f, 0.03f, 4.0f, 0.2f);
 
-	mWaves = std::make_unique<Waves>(128, 128, 1.0f , 0.03f, 4.0f, 0.1f);
-	mFabric = std::make_unique<Fabric>(128, 128, 1.0f, 0.01, 3000, 2500, 1.1, 1.5, 0.8);
-
-	BuildRootSignature();			// Determines the types of data the shaders should expect,
-									// but does not define the actual memory or data.
-
-    BuildShadersAndInputLayout();   // self-explainatory 
+    BuildRootSignature();
+    BuildShadersAndInputLayout();
 	BuildLandGeometry();
     BuildWavesGeometryBuffers();
-	BuildFabricGeometryBuffers();
-	BuildMaterials();
-    BuildRenderItems();				// constructs Render Item objects
-
-    BuildFrameResources();			// A frame resource stores the needed
-									// resources needed for the CPU to build
-									// the command lists for a frame.
+    BuildRenderItems();
+    BuildFrameResources();
 	BuildPSOs();
 
     // Execute the initialization commands.
@@ -224,7 +198,7 @@ bool FabricApp::Initialize()
     return true;
 }
  
-void FabricApp::OnResize()
+void LandAndWavesApp::OnResize()
 {
     D3DApp::OnResize();
 
@@ -233,7 +207,7 @@ void FabricApp::OnResize()
     XMStoreFloat4x4(&mProj, P);
 }
 
-void FabricApp::Update(const GameTimer& gt)
+void LandAndWavesApp::Update(const GameTimer& gt)
 {
 	OnKeyboardInput(gt);
 	UpdateCamera(gt);
@@ -253,13 +227,11 @@ void FabricApp::Update(const GameTimer& gt)
 	}
 
 	UpdateObjectCBs(gt);
-	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
 	UpdateWaves(gt);
-	UpdateFabric(gt);
 }
 
-void FabricApp::Draw(const GameTimer& gt)
+void LandAndWavesApp::Draw(const GameTimer& gt)
 {
 	auto cmdListAlloc = mCurrFrameResource->CmdListAlloc;
 
@@ -269,7 +241,14 @@ void FabricApp::Draw(const GameTimer& gt)
 
 	// A command list can be reset after it has been added to the command queue via ExecuteCommandList.
 	// Reusing the command list reuses memory.
-	ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
+    if(mIsWireframe)
+    {
+        ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque_wireframe"].Get()));
+    }
+    else
+    {
+        ThrowIfFailed(mCommandList->Reset(cmdListAlloc.Get(), mPSOs["opaque"].Get()));
+    }
 
 	mCommandList->RSSetViewports(1, &mScreenViewport);
 	mCommandList->RSSetScissorRects(1, &mScissorRect);
@@ -287,8 +266,9 @@ void FabricApp::Draw(const GameTimer& gt)
 
 	mCommandList->SetGraphicsRootSignature(mRootSignature.Get());
 
+    // Bind per-pass constant buffer.  We only need to do this once per-pass.
 	auto passCB = mCurrFrameResource->PassCB->Resource();
-	mCommandList->SetGraphicsRootConstantBufferView(2, passCB->GetGPUVirtualAddress());
+	mCommandList->SetGraphicsRootConstantBufferView(1, passCB->GetGPUVirtualAddress());
 
 	DrawRenderItems(mCommandList.Get(), mRitemLayer[(int)RenderLayer::Opaque]);
 
@@ -316,7 +296,7 @@ void FabricApp::Draw(const GameTimer& gt)
 	mCommandQueue->Signal(mFence.Get(), mCurrentFence);
 }
 
-void FabricApp::OnMouseDown(WPARAM btnState, int x, int y)
+void LandAndWavesApp::OnMouseDown(WPARAM btnState, int x, int y)
 {
     mLastMousePos.x = x;
     mLastMousePos.y = y;
@@ -324,12 +304,12 @@ void FabricApp::OnMouseDown(WPARAM btnState, int x, int y)
     SetCapture(mhMainWnd);
 }
 
-void FabricApp::OnMouseUp(WPARAM btnState, int x, int y)
+void LandAndWavesApp::OnMouseUp(WPARAM btnState, int x, int y)
 {
     ReleaseCapture();
 }
 
-void FabricApp::OnMouseMove(WPARAM btnState, int x, int y)
+void LandAndWavesApp::OnMouseMove(WPARAM btnState, int x, int y)
 {
     if((btnState & MK_LBUTTON) != 0)
     {
@@ -361,26 +341,15 @@ void FabricApp::OnMouseMove(WPARAM btnState, int x, int y)
     mLastMousePos.y = y;
 }
 
-void FabricApp::OnKeyboardInput(const GameTimer& gt)
+void LandAndWavesApp::OnKeyboardInput(const GameTimer& gt)
 {
-	const float dt = gt.DeltaTime();
-
-	if(GetAsyncKeyState(VK_LEFT) & 0x8000)
-		mSunTheta -= 1.0f*dt;
-
-	if(GetAsyncKeyState(VK_RIGHT) & 0x8000)
-		mSunTheta += 1.0f*dt;
-
-	if(GetAsyncKeyState(VK_UP) & 0x8000)
-		mSunPhi -= 1.0f*dt;
-
-	if(GetAsyncKeyState(VK_DOWN) & 0x8000)
-		mSunPhi += 1.0f*dt;
-
-	mSunPhi = MathHelper::Clamp(mSunPhi, 0.1f, XM_PIDIV2);
+    if(GetAsyncKeyState('1') & 0x8000)
+        mIsWireframe = true;
+    else
+        mIsWireframe = false;
 }
 
-void FabricApp::UpdateCamera(const GameTimer& gt)
+void LandAndWavesApp::UpdateCamera(const GameTimer& gt)
 {
 	// Convert Spherical to Cartesian coordinates.
 	mEyePos.x = mRadius*sinf(mPhi)*cosf(mTheta);
@@ -396,7 +365,7 @@ void FabricApp::UpdateCamera(const GameTimer& gt)
 	XMStoreFloat4x4(&mView, view);
 }
 
-void FabricApp::UpdateObjectCBs(const GameTimer& gt)
+void LandAndWavesApp::UpdateObjectCBs(const GameTimer& gt)
 {
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 	for(auto& e : mAllRitems)
@@ -406,7 +375,6 @@ void FabricApp::UpdateObjectCBs(const GameTimer& gt)
 		if(e->NumFramesDirty > 0)
 		{
 			XMMATRIX world = XMLoadFloat4x4(&e->World);
-			XMMATRIX texTransform = XMLoadFloat4x4(&e->TexTransform);
 
 			ObjectConstants objConstants;
 			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
@@ -419,32 +387,7 @@ void FabricApp::UpdateObjectCBs(const GameTimer& gt)
 	}
 }
 
-void FabricApp::UpdateMaterialCBs(const GameTimer& gt)
-{
-	auto currMaterialCB = mCurrFrameResource->MaterialCB.get();
-	for(auto& e : mMaterials)
-	{
-		// Only update the cbuffer data if the constants have changed.  If the cbuffer
-		// data changes, it needs to be updated for each FrameResource.
-		Material* mat = e.second.get();
-		if(mat->NumFramesDirty > 0)
-		{
-			XMMATRIX matTransform = XMLoadFloat4x4(&mat->MatTransform);
-
-			MaterialConstants matConstants;
-			matConstants.DiffuseAlbedo = mat->DiffuseAlbedo;
-			matConstants.FresnelR0 = mat->FresnelR0;
-			matConstants.Roughness = mat->Roughness;
-
-			currMaterialCB->CopyData(mat->MatCBIndex, matConstants);
-
-			// Next FrameResource need to be updated too.
-			mat->NumFramesDirty--;
-		}
-	}
-}
-
-void FabricApp::UpdateMainPassCB(const GameTimer& gt)
+void LandAndWavesApp::UpdateMainPassCB(const GameTimer& gt)
 {
 	XMMATRIX view = XMLoadFloat4x4(&mView);
 	XMMATRIX proj = XMLoadFloat4x4(&mProj);
@@ -467,37 +410,12 @@ void FabricApp::UpdateMainPassCB(const GameTimer& gt)
 	mMainPassCB.FarZ = 1000.0f;
 	mMainPassCB.TotalTime = gt.TotalTime();
 	mMainPassCB.DeltaTime = gt.DeltaTime();
-	mMainPassCB.AmbientLight = { 0.25f, 0.25f, 0.35f, 1.0f };
-
-	XMVECTOR lightDir = -MathHelper::SphericalToCartesian(1.0f, mSunTheta, mSunPhi);
-
-	XMStoreFloat3(&mMainPassCB.Lights[0].Direction, lightDir);
-	mMainPassCB.Lights[0].Strength = { 1.0f, 1.0f, 0.9f };
 
 	auto currPassCB = mCurrFrameResource->PassCB.get();
 	currPassCB->CopyData(0, mMainPassCB);
 }
 
-void FabricApp::UpdateFabric(const GameTimer& gt) 
-{
-	mFabric->Update(gt.DeltaTime(),
-		MathHelper::RandF(0.9,1.0),
-		MathHelper::RandF(1.0,1.5)*cos(0.1*gt.TotalTime()),
-		MathHelper::RandF(0.1,0.2));
-	auto currFabricVB = mCurrFrameResource->FabricVB.get();
-	for (int i = 0; i < mFabric->VertexCount(); ++i)
-	{
-		Vertex v;
-
-		v.Pos = mFabric->Position(i);
-		v.Normal = mFabric->Normal(i);
-
-		currFabricVB->CopyData(i, v);
-	}
-	mFabricRitem->Geo->VertexBufferGPU = currFabricVB->Resource();
-}
-
-void FabricApp::UpdateWaves(const GameTimer& gt)
+void LandAndWavesApp::UpdateWaves(const GameTimer& gt)
 {
 	// Every quarter second, generate a random wave.
 	static float t_base = 0.0f;
@@ -510,11 +428,11 @@ void FabricApp::UpdateWaves(const GameTimer& gt)
 
 		float r = MathHelper::RandF(0.2f, 0.5f);
 
-		//mWaves->Disturb(i, j, r);
+		mWaves->Disturb(i, j, r);
 	}
 
 	// Update the wave simulation.
-	//mWaves->Update(gt.DeltaTime());
+	mWaves->Update(gt.DeltaTime());
 
 	// Update the wave vertex buffer with the new solution.
 	auto currWavesVB = mCurrFrameResource->WavesVB.get();
@@ -523,7 +441,7 @@ void FabricApp::UpdateWaves(const GameTimer& gt)
 		Vertex v;
 
 		v.Pos = mWaves->Position(i);
-		v.Normal = mWaves->Normal(i);
+        v.Color = XMFLOAT4(DirectX::Colors::Blue);
 
 		currWavesVB->CopyData(i, v);
 	}
@@ -532,30 +450,24 @@ void FabricApp::UpdateWaves(const GameTimer& gt)
 	mWavesRitem->Geo->VertexBufferGPU = currWavesVB->Resource();
 }
 
-void FabricApp::BuildRootSignature()
+void LandAndWavesApp::BuildRootSignature()
 {
-	// 3 params
-
     // Root parameter can be a table, root descriptor or root constants.
-    CD3DX12_ROOT_PARAMETER slotRootParameter[3];
-
-	// init as CBV's
+    CD3DX12_ROOT_PARAMETER slotRootParameter[2];
 
     // Create root CBV.
     slotRootParameter[0].InitAsConstantBufferView(0);
     slotRootParameter[1].InitAsConstantBufferView(1);
-    slotRootParameter[2].InitAsConstantBufferView(2);
-
 
     // A root signature is an array of root parameters.
-	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(3, slotRootParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	CD3DX12_ROOT_SIGNATURE_DESC rootSigDesc(2, slotRootParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
     // create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
     ComPtr<ID3DBlob> serializedRootSig = nullptr;
     ComPtr<ID3DBlob> errorBlob = nullptr;
     HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
         serializedRootSig.GetAddressOf(), errorBlob.GetAddressOf());
-	
+
     if(errorBlob != nullptr)
     {
         ::OutputDebugStringA((char*)errorBlob->GetBufferPointer());
@@ -569,22 +481,22 @@ void FabricApp::BuildRootSignature()
         IID_PPV_ARGS(mRootSignature.GetAddressOf())));
 }
 
-void FabricApp::BuildShadersAndInputLayout()
+void LandAndWavesApp::BuildShadersAndInputLayout()
 {
-	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "VS", "vs_5_0");
-	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\Default.hlsl", nullptr, "PS", "ps_5_0");
+	mShaders["standardVS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "VS", "vs_5_0");
+	mShaders["opaquePS"] = d3dUtil::CompileShader(L"Shaders\\color.hlsl", nullptr, "PS", "ps_5_0");
 
     mInputLayout =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 }
 
-void FabricApp::BuildLandGeometry()
+void LandAndWavesApp::BuildLandGeometry()
 {
 	GeometryGenerator geoGen;
-	GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 20.0f, 50, 50);
+	GeometryGenerator::MeshData grid = geoGen.CreateGrid(160.0f, 160.0f, 50, 50);
 
 	//
 	// Extract the vertex elements we are interested and apply the height function to
@@ -597,10 +509,36 @@ void FabricApp::BuildLandGeometry()
 	{
 		auto& p = grid.Vertices[i].Position;
 		vertices[i].Pos = p;
-		vertices[i].Pos.y = GetHillsHeight(p.x, p.z) + 20;
-		vertices[i].Normal = GetHillsNormal(p.x, p.z);
-	}
+		vertices[i].Pos.y = GetHillsHeight(p.x, p.z);
 
+        // Color the vertex based on its height.
+        if(vertices[i].Pos.y < -10.0f)
+        {
+            // Sandy beach color.
+            vertices[i].Color = XMFLOAT4(1.0f, 0.96f, 0.62f, 1.0f);
+        }
+        else if(vertices[i].Pos.y < 5.0f)
+        {
+            // Light yellow-green.
+            vertices[i].Color = XMFLOAT4(0.48f, 0.77f, 0.46f, 1.0f);
+        }
+        else if(vertices[i].Pos.y < 12.0f)
+        {
+            // Dark yellow-green.
+            vertices[i].Color = XMFLOAT4(0.1f, 0.48f, 0.19f, 1.0f);
+        }
+        else if(vertices[i].Pos.y < 20.0f)
+        {
+            // Dark brown.
+            vertices[i].Color = XMFLOAT4(0.45f, 0.39f, 0.34f, 1.0f);
+        }
+        else
+        {
+            // White snow.
+            vertices[i].Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+	}
+    
 	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
 
 	std::vector<std::uint16_t> indices = grid.GetIndices16();
@@ -636,53 +574,30 @@ void FabricApp::BuildLandGeometry()
 	mGeometries["landGeo"] = std::move(geo);
 }
 
-void FabricApp::BuildFabricGeometryBuffers() {
-	assert(mFabric->VertexCount() < 0x0000ffff);
-
-	// Iterate over each quad.
-	int m = mFabric->RowCount();
-	int n = mFabric->ColumnCount();
-	int tri_cnt = mFabric->TriangleCount();
-	auto indices = GeometryGenerator::CreateGridIndices(m, n, tri_cnt);
-
-	UINT vbByteSize = mFabric->VertexCount() * sizeof(Vertex);
-	UINT ibByteSize = (UINT)indices.size() * sizeof(std::uint16_t);
-	auto geo = std::make_unique<MeshGeometry>();
-	geo->Name = "fabricGeo";
-
-	// Set dynamically.
-	geo->VertexBufferCPU = nullptr;
-
-	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
-	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
-
-	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
-		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
-
-	geo->VertexByteStride = sizeof(Vertex);
-	geo->VertexBufferByteSize = vbByteSize;
-	geo->IndexFormat = DXGI_FORMAT_R16_UINT;
-	geo->IndexBufferByteSize = ibByteSize;
-
-	SubmeshGeometry submesh;
-	submesh.IndexCount = (UINT)indices.size();
-	submesh.StartIndexLocation = 0;
-	submesh.BaseVertexLocation = 0;
-
-	geo->DrawArgs["grid"] = submesh;
-
-	mGeometries["fabricGeo"] = std::move(geo);
-}
-
-void FabricApp::BuildWavesGeometryBuffers()
+void LandAndWavesApp::BuildWavesGeometryBuffers()
 {
+	std::vector<std::uint16_t> indices(3 * mWaves->TriangleCount()); // 3 indices per face
 	assert(mWaves->VertexCount() < 0x0000ffff);
 
 	// Iterate over each quad.
 	int m = mWaves->RowCount();
 	int n = mWaves->ColumnCount();
-	int tri_cnt = mWaves->TriangleCount();
-	auto indices = GeometryGenerator::CreateGridIndices(m,n,tri_cnt);
+	int k = 0;
+	for(int i = 0; i < m - 1; ++i)
+	{
+		for(int j = 0; j < n - 1; ++j)
+		{
+			indices[k] = i*n + j;
+			indices[k + 1] = i*n + j + 1;
+			indices[k + 2] = (i + 1)*n + j;
+
+			indices[k + 3] = (i + 1)*n + j;
+			indices[k + 4] = i*n + j + 1;
+			indices[k + 5] = (i + 1)*n + j + 1;
+
+			k += 6; // next quad
+		}
+	}
 
 	UINT vbByteSize = mWaves->VertexCount()*sizeof(Vertex);
 	UINT ibByteSize = (UINT)indices.size()*sizeof(std::uint16_t);
@@ -692,6 +607,7 @@ void FabricApp::BuildWavesGeometryBuffers()
 
 	// Set dynamically.
 	geo->VertexBufferCPU = nullptr;
+	geo->VertexBufferGPU = nullptr;
 
 	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
 	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
@@ -714,8 +630,7 @@ void FabricApp::BuildWavesGeometryBuffers()
 	mGeometries["waterGeo"] = std::move(geo);
 }
 
-// Build pipeline state objects (PSO)
-void FabricApp::BuildPSOs()
+void LandAndWavesApp::BuildPSOs()
 {
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC opaquePsoDesc;
 
@@ -746,79 +661,30 @@ void FabricApp::BuildPSOs()
 	opaquePsoDesc.SampleDesc.Quality = m4xMsaaState ? (m4xMsaaQuality - 1) : 0;
 	opaquePsoDesc.DSVFormat = mDepthStencilFormat;
 	ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaquePsoDesc, IID_PPV_ARGS(&mPSOs["opaque"])));
+
+    //
+    // PSO for opaque wireframe objects.
+    //
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC opaqueWireframePsoDesc = opaquePsoDesc;
+    opaqueWireframePsoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+    ThrowIfFailed(md3dDevice->CreateGraphicsPipelineState(&opaqueWireframePsoDesc, IID_PPV_ARGS(&mPSOs["opaque_wireframe"])));
 }
 
-void FabricApp::BuildFrameResources()
+void LandAndWavesApp::BuildFrameResources()
 {
     for(int i = 0; i < gNumFrameResources; ++i)
     {
         mFrameResources.push_back(std::make_unique<FrameResource>(md3dDevice.Get(),
-            1, (UINT)mAllRitems.size(), (UINT)mMaterials.size(), mWaves->VertexCount()));
+            1, (UINT)mAllRitems.size(), mWaves->VertexCount()));
     }
 }
 
-void FabricApp::BuildMaterials()
+void LandAndWavesApp::BuildRenderItems()
 {
-	auto grass = std::make_unique<Material>();
-	grass->Name = "grass";
-	grass->MatCBIndex = 0;
-    grass->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
-    grass->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
-    grass->Roughness = 0.125f;
-	
-	auto fabric = std::make_unique<Material>();
-	fabric->Name = "fabric";
-	fabric->MatCBIndex = 1;
-	fabric->DiffuseAlbedo = XMFLOAT4(0.2f, 0.6f, 0.2f, 1.0f);
-	fabric->FresnelR0 = XMFLOAT3(0.01f, 0.01f, 0.01f);
-	fabric->Roughness = 0.125f;
-	
-    // This is not a good water material definition, but we do not have all the rendering
-    // tools we need (transparency, environment reflection), so we fake it for now.
-	auto water = std::make_unique<Material>();
-	water->Name = "water";
-	water->MatCBIndex = 2;
-    water->DiffuseAlbedo = XMFLOAT4(0.0f, 0.2f, 0.6f, 1.0f);
-    water->FresnelR0 = XMFLOAT3(0.1f, 0.1f, 0.1f);
-    water->Roughness = 0.0f;
-
-	mMaterials["grass"] = std::move(grass);
-	mMaterials["water"] = std::move(water);
-	mMaterials["fabric"] = std::move(fabric);
-}
-
-void FabricApp::BuildRenderItems()
-{
-	auto gridRitem = std::make_unique<RenderItem>();
-	gridRitem->World = MathHelper::Identity4x4();
-	gridRitem->ObjCBIndex = 0;
-	gridRitem->Mat = mMaterials["grass"].get();
-	gridRitem->Geo = mGeometries["landGeo"].get();
-	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
-	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
-
-	auto fabricRitem = std::make_unique<RenderItem>();
-	fabricRitem->World = MathHelper::Identity4x4();
-	fabricRitem->ObjCBIndex = 1;
-	fabricRitem->Mat = mMaterials["fabric"].get();
-	fabricRitem->Geo = mGeometries["fabricGeo"].get();
-	fabricRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	fabricRitem->IndexCount = fabricRitem->Geo->DrawArgs["grid"].IndexCount;
-	fabricRitem->StartIndexLocation = fabricRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	fabricRitem->BaseVertexLocation = fabricRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-
-	mFabricRitem = fabricRitem.get();
-
-	mRitemLayer[(int)RenderLayer::Opaque].push_back(fabricRitem.get());
-
 	auto wavesRitem = std::make_unique<RenderItem>();
 	wavesRitem->World = MathHelper::Identity4x4();
-	wavesRitem->ObjCBIndex = 2;
-	wavesRitem->Mat = mMaterials["water"].get();
+	wavesRitem->ObjCBIndex = 0;
 	wavesRitem->Geo = mGeometries["waterGeo"].get();
 	wavesRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	wavesRitem->IndexCount = wavesRitem->Geo->DrawArgs["grid"].IndexCount;
@@ -829,42 +695,51 @@ void FabricApp::BuildRenderItems()
 
 	mRitemLayer[(int)RenderLayer::Opaque].push_back(wavesRitem.get());
 
-	mAllRitems.push_back(std::move(gridRitem));
-	mAllRitems.push_back(std::move(fabricRitem));
+	auto gridRitem = std::make_unique<RenderItem>();
+	gridRitem->World = MathHelper::Identity4x4();
+	gridRitem->ObjCBIndex = 1;
+	gridRitem->Geo = mGeometries["landGeo"].get();
+	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
+	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
+	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
+
+	mRitemLayer[(int)RenderLayer::Opaque].push_back(gridRitem.get());
+
 	mAllRitems.push_back(std::move(wavesRitem));
+	mAllRitems.push_back(std::move(gridRitem));
 }
 
-void FabricApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
+void LandAndWavesApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::vector<RenderItem*>& ritems)
 {
 	UINT objCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(ObjectConstants));
-	UINT matCBByteSize = d3dUtil::CalcConstantBufferByteSize(sizeof(MaterialConstants));
 
 	auto objectCB = mCurrFrameResource->ObjectCB->Resource();
-	auto matCB = mCurrFrameResource->MaterialCB->Resource();
 
 	// For each render item...
-	for(const auto& ri : ritems)
+	for(size_t i = 0; i < ritems.size(); ++i)
 	{
+		auto ri = ritems[i];
+
 		cmdList->IASetVertexBuffers(0, 1, &ri->Geo->VertexBufferView());
 		cmdList->IASetIndexBuffer(&ri->Geo->IndexBufferView());
 		cmdList->IASetPrimitiveTopology(ri->PrimitiveType);
 
-		D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress() + ri->ObjCBIndex*objCBByteSize;
-		D3D12_GPU_VIRTUAL_ADDRESS matCBAddress = matCB->GetGPUVirtualAddress() + ri->Mat->MatCBIndex*matCBByteSize;
+        D3D12_GPU_VIRTUAL_ADDRESS objCBAddress = objectCB->GetGPUVirtualAddress();
+        objCBAddress += ri->ObjCBIndex*objCBByteSize;
 
 		cmdList->SetGraphicsRootConstantBufferView(0, objCBAddress);
-		cmdList->SetGraphicsRootConstantBufferView(1, matCBAddress);
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}
 }
 
-float FabricApp::GetHillsHeight(float x, float z)const
+float LandAndWavesApp::GetHillsHeight(float x, float z)const
 {
     return 0.3f*(z*sinf(0.1f*x) + x*cosf(0.1f*z));
 }
 
-XMFLOAT3 FabricApp::GetHillsNormal(float x, float z)const
+XMFLOAT3 LandAndWavesApp::GetHillsNormal(float x, float z)const
 {
     // n = (-df/dx, 1, -df/dz)
     XMFLOAT3 n(

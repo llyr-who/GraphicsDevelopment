@@ -23,7 +23,7 @@ public:
 	float Depth() const;
 
 	// this returns the solution at the ith grid point
-	const DirectX::XMFLOAT3& operator[](int i)const { return currPos[i]; }
+	const DirectX::XMFLOAT3& Position(int i)const { return currPos[i]; }
 
 	// Returns the solution normal at the ith grid point.
 	const DirectX::XMFLOAT3& Normal(int i)const { return normals[i]; }
