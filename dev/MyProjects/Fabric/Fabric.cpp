@@ -93,9 +93,9 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 	if (t >= dt)
 	{
 
-		for (std::size_t i = 0; i < n; i++)
+		for (std::size_t j = 0; j < m; j++)
 		{
-			for (std::size_t j = 0; j < m; j++)
+			for (std::size_t i = 0; i < n; i++)
 			{
 				force[j * n + i].x = 0;
 				force[j * n + i].y = 0;
@@ -103,29 +103,35 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 			}
 		}
 
-		for (std::size_t j = 0; j < n; j++)
-		//concurrency::parallel_for(0, n, [this, &windX, &windY, &windZ, &n](int j) 
-		{
-			for (std::size_t i = 0; i < n; i++)
-			{
-				float WFx, WFy, WFz;
-				WFx = normals[j * n + i].x * (windX - velocity[j * n + i].x);
-				WFy = normals[j * n + i].y * (windY - velocity[j * n + i].y);
-				WFz = normals[j * n + i].z * (windZ - velocity[j * n + i].z);
-				float Wind = ((WFx + WFy + WFz) > 0 ? WFx + WFy + WFz : -(WFx + WFy + WFz));
-				force[j * n + i].x += 0.3 * Wind * windX;
-				force[j * n + i].y += mass * gravity + 0.3 * Wind * windY;
-				force[j * n + i].z += 0.3 * Wind * windZ;
 
+		// does this make sence for the wind update? - could be factored out anyway
+		for (std::size_t j = 0; j < m; j++)
+		//concurrency::parallel_for(0, n, [this, &windX, &windY, &windZ, &n](int j)
+			{
+				for (std::size_t i = 0; i < n; i++)
+				{
+					float WFx, WFy, WFz;
+					WFx = normals[j * n + i].x * (windX - velocity[j * n + i].x);
+					WFy = normals[j * n + i].y * (windY - velocity[j * n + i].y);
+					WFz = normals[j * n + i].z * (windZ - velocity[j * n + i].z);
+					float Wind = ((WFx + WFy + WFz) > 0 ? WFx + WFy + WFz : -(WFx + WFy + WFz));
+					force[j * n + i].x += 0.3f * Wind * windX;
+					force[j * n + i].y += mass * gravity + 0.3 * Wind * windY;
+					force[j * n + i].z += 0.3f * Wind * windZ;
+
+				}
 			}
-		};
 
 		//we do the double links first
 
-		for (std::size_t i = 0; i < n - 2; i++)
+		for (std::size_t j = 0; j < m - 2; j++)
 		{
-			for (std::size_t j = 0; j < m - 2; j++)
+			for (std::size_t i = 0; i < n - 2; i++)
 			{
+				std::size_t j_plus_2_times_n_plus_i = (j + 2) * n + i;
+				std::size_t j_times_n_plus_i = j * n + i;
+				std::size_t j_times_n_plus_i_plus_2 = j * n + i + 2;
+
 				float F1x, F1y, F1z;
 				float F2x, F2y, F2z;
 				float diffx;
@@ -137,53 +143,48 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 				float diffNorm;
 				float k;
 
-				diffx = currPos[(j + 2) * n + i].x - currPos[j * n + i].x;
-				diffy = currPos[(j + 2) * n + i].y - currPos[j * n + i].y;
-				diffz = currPos[(j + 2) * n + i].z - currPos[j * n + i].z;
+				diffx = currPos[j_plus_2_times_n_plus_i].x - currPos[j_times_n_plus_i].x;
+				diffy = currPos[j_plus_2_times_n_plus_i].y - currPos[j_times_n_plus_i].y;
+				diffz = currPos[j_plus_2_times_n_plus_i].z - currPos[j_times_n_plus_i].z;
 				diffNorm = sqrt(diffx * diffx + diffy * diffy + diffz * diffz);
 				k = longSpring * (diffNorm - 2 * dx) * (1 / diffNorm);
 				//now force due to damper
-				velDiffx = velocity[(j + 2) * n + i].x - velocity[j * n + i].x;
-				velDiffy = velocity[(j + 2) * n + i].y - velocity[j * n + i].y;
-				velDiffz = velocity[(j + 2) * n + i].z - velocity[j * n + i].z;
+				velDiffx = velocity[j_plus_2_times_n_plus_i].x - velocity[j_times_n_plus_i].x;
+				velDiffy = velocity[j_plus_2_times_n_plus_i].y - velocity[j_times_n_plus_i].y;
+				velDiffz = velocity[j_plus_2_times_n_plus_i].z - velocity[j_times_n_plus_i].z;
 
 				F1x = k * diffx + longDamp * velDiffx;
 				F1y = k * diffy + longDamp * velDiffy;
 				F1z = k * diffz + longDamp * velDiffz;
 
-				diffx = currPos[j * n + i + 2].x - currPos[j * n + i].x;
-				diffy = currPos[j * n + i + 2].y - currPos[j * n + i].y;
-				diffz = currPos[j * n + i + 2].z - currPos[j * n + i].z;
+				diffx = currPos[j_times_n_plus_i_plus_2].x - currPos[j_times_n_plus_i].x;
+				diffy = currPos[j_times_n_plus_i_plus_2].y - currPos[j_times_n_plus_i].y;
+				diffz = currPos[j_times_n_plus_i_plus_2].z - currPos[j_times_n_plus_i].z;
 				diffNorm = sqrt(diffx * diffx + diffy * diffy + diffz * diffz);
 				k = longSpring * (diffNorm - 2 * dx) * (1 / diffNorm);
 				//now force due to damper
-				velDiffx = velocity[j * n + i + 2].x - velocity[j * n + i].x;
-				velDiffy = velocity[j * n + i + 2].y - velocity[j * n + i].y;
-				velDiffz = velocity[j * n + i + 2].z - velocity[j * n + i].z;
+				velDiffx = velocity[j_times_n_plus_i_plus_2].x - velocity[j_times_n_plus_i].x;
+				velDiffy = velocity[j_times_n_plus_i_plus_2].y - velocity[j_times_n_plus_i].y;
+				velDiffz = velocity[j_times_n_plus_i_plus_2].z - velocity[j_times_n_plus_i].z;
 
 				F2x = k * diffx + longDamp * velDiffx;
 				F2y = k * diffy + longDamp * velDiffy;
 				F2z = k * diffz + longDamp * velDiffz;
 
-				force[(j + 2) * n + i].x -= F1x;
-				force[(j + 2) * n + i].y -= F1y;
-				force[(j + 2) * n + i].z -= F1z;
+				force[j_plus_2_times_n_plus_i].x -= F1x;
+				force[j_plus_2_times_n_plus_i].y -= F1y;
+				force[j_plus_2_times_n_plus_i].z -= F1z;
 
+				force[j_times_n_plus_i].x += F1x;
+				force[j_times_n_plus_i].y += F1y;
+				force[j_times_n_plus_i].z += F1z;
+				force[j_times_n_plus_i].x += F2x;
+				force[j_times_n_plus_i].y += F2y;
+				force[j_times_n_plus_i].z += F2z;
 
-				force[j * n + i].x += F1x;
-				force[j * n + i].y += F1y;
-				force[j * n + i].z += F1z;
-
-
-				force[j * n + i + 2].x -= F2x;
-				force[j * n + i + 2].y -= F2y;
-				force[j * n + i + 2].z -= F2z;
-
-				force[j * n + i].x += F2x;
-				force[j * n + i].y += F2y;
-				force[j * n + i].z += F2z;
-
-
+				force[j_times_n_plus_i_plus_2].x -= F2x;
+				force[j_times_n_plus_i_plus_2].y -= F2y;
+				force[j_times_n_plus_i_plus_2].z -= F2z;
 			}
 		}
 
@@ -266,9 +267,9 @@ void Fabric::Update(float ddt, float windX, float windY, float windZ)
 
 		}
 
-		for (std::size_t i = 0; i < n - 1; i++)
+		for (std::size_t j = 0; j < m - 1; j++)
 		{
-			for (std::size_t j = 0; j < m - 1; j++)
+			for (std::size_t i = 0; i < n - 1; i++)
 			{
 
 
