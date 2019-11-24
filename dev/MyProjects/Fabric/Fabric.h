@@ -34,6 +34,7 @@ public:
 
 	void Update(float dt, float windX, float windY, float windZ);
 private:
+
 	std::size_t numRows;
 	std::size_t numCols;
 
@@ -47,8 +48,8 @@ private:
 	//as gravity always points in the neg y direction.
 	float gravity;
 
-	//some ability to modify the spring constant parameters
-	//should be added at some point.
+	float wind_infl = 0.5f;
+
 	float shortDamp;
 	float shortSpring;
 	float longDamp;

@@ -196,7 +196,7 @@ bool FabricApp::Initialize()
     mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 	mWaves = std::make_unique<Waves>(128, 128, 1.0f , 0.03f, 4.0f, 0.1f);
-	mFabric = std::make_unique<Fabric>(128, 128, 0.5f, 0.01f, 1000.0f, 1500.0f, 1.0f, 2.0f, 0.9f);
+	mFabric = std::make_unique<Fabric>(128, 128, 0.5f, 0.02f, 1000.0f, 1500.0f, 2.5f, 2.0f, 0.9f);
 
 	BuildRootSignature();			// Determines the types of data the shaders should expect,
 									// but does not define the actual memory or data.
@@ -481,9 +481,9 @@ void FabricApp::UpdateMainPassCB(const GameTimer& gt)
 void FabricApp::UpdateFabric(const GameTimer& gt) 
 {
 	mFabric->Update(gt.DeltaTime(),
-		MathHelper::RandF(0.9,1.0),
-		MathHelper::RandF(1.0,1.5)*cos(0.1*gt.TotalTime()),
-		MathHelper::RandF(0.1,0.2));
+		MathHelper::RandF(1.0, 1.5) * std::abs(cos(0.1 * gt.TotalTime())),
+		0.0f,
+		0.0f);
 	auto currFabricVB = mCurrFrameResource->FabricVB.get();
 	for (int i = 0; i < mFabric->VertexCount(); ++i)
 	{
